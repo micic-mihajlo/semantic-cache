@@ -1,5 +1,7 @@
 """Integration tests for the semantic cache API."""
 
+from unittest.mock import AsyncMock
+
 import pytest
 
 
@@ -248,3 +250,46 @@ async def test_whitespace_only_query_error(client):
 
     # Whitespace-only should fail validation like empty string
     assert response.status_code == 422
+
+
+# HTTP status code tests for LLM errors
+
+
+@pytest.mark.asyncio
+async def test_llm_api_error_returns_502(client, mock_cache_service, mock_llm_service):
+    """Test that LLM API errors return HTTP 502 Bad Gateway."""
+    from app.services.llm import LLMServiceUnavailableError
+
+    mock_cache_service.search.return_value = None
+    mock_llm_service.generate = AsyncMock(
+        side_effect=LLMServiceUnavailableError("LLM service unavailable: API error")
+    )
+
+    response = await client.post(
+        "/api/query",
+        json={"query": "What is the capital of France?"},
+    )
+
+    assert response.status_code == 502
+    data = response.json()
+    assert "LLM service unavailable" in data["detail"]
+
+
+@pytest.mark.asyncio
+async def test_llm_rate_limit_returns_429(client, mock_cache_service, mock_llm_service):
+    """Test that LLM rate limit errors return HTTP 429 Too Many Requests."""
+    from app.services.llm import LLMRateLimitError
+
+    mock_cache_service.search.return_value = None
+    mock_llm_service.generate = AsyncMock(
+        side_effect=LLMRateLimitError("Rate limit exceeded")
+    )
+
+    response = await client.post(
+        "/api/query",
+        json={"query": "What is the capital of France?"},
+    )
+
+    assert response.status_code == 429
+    data = response.json()
+    assert "Rate limit exceeded" in data["detail"]

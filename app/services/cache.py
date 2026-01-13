@@ -28,7 +28,21 @@ class CacheService:
     def connect(self) -> None:
         """Connect to Redis and ensure index exists."""
         self.redis_client = redis.from_url(self.redis_url, decode_responses=False)
+        self._configure_eviction_policy()
         self._ensure_index()
+
+    def _configure_eviction_policy(self) -> None:
+        """Configure Redis eviction policy to volatile-ttl."""
+        if self.redis_client is None:
+            return
+
+        try:
+            # Set eviction policy to volatile-ttl (evicts keys with shortest TTL when memory full)
+            self.redis_client.config_set("maxmemory-policy", "volatile-ttl")
+            logger.info("Redis eviction policy set to volatile-ttl")
+        except redis.ResponseError as e:
+            # Some Redis configurations may not allow runtime config changes
+            logger.warning(f"Could not set eviction policy: {e}")
 
     def _ensure_index(self) -> None:
         """Create RediSearch index if it doesn't exist."""

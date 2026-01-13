@@ -14,6 +14,17 @@ All phases implemented and tested. The semantic caching system is production-rea
 
 ### Recent Updates
 
+**v0.0.6** - Fixed HTTP status codes and Redis eviction policy:
+- **HTTP status code differentiation**: APIError now returns HTTP 502 (Bad Gateway), RateLimitError returns HTTP 429 (Too Many Requests)
+- Added custom exception classes `LLMServiceUnavailableError` and `LLMRateLimitError` in `app/services/llm.py`
+- Updated `app/api/routes.py` to catch and return appropriate HTTP status codes per spec
+- **Redis eviction policy**: Configured `volatile-ttl` eviction policy in docker-compose.yml and cache.py
+- Added `_configure_eviction_policy()` method to CacheService for runtime configuration
+- **Comprehensive cache service tests**: Added 17 new tests in `TestCacheService` class
+- Tests cover: initialization, search, store, close, error handling, eviction policy configuration
+- **Test coverage improved from 67% to 90%**
+- Total tests: 55 (up from 36)
+
 **v0.0.5** - Expanded test coverage:
 - Added `tests/test_services.py` with 20 unit tests for embedding, classifier, and LLM services
 - Added edge case tests for special characters, Unicode, newlines, long queries, and numbers
@@ -54,6 +65,7 @@ All phases implemented and tested. The semantic caching system is production-rea
   - evergreen: 0.30 threshold, 604800s TTL
 - [x] `app/services/cache.py` - Redis vector search with TTL
   - Create RediSearch index on startup (FLAT, 384 dims, COSINE)
+  - Configure eviction policy to `volatile-ttl` on connect
   - `search(embedding, threshold)` - KNN 1 vector search
   - `store(query, response, embedding, query_type, ttl)` - Hash storage with TTL
 - [x] `app/services/llm.py` - OpenAI AsyncClient wrapper
@@ -74,13 +86,13 @@ All phases implemented and tested. The semantic caching system is production-rea
 - [x] `app/api/routes.py` - API router
   - POST /api/query - main endpoint
   - GET /health - health check returning {"status": "ok"}
-  - Proper error handling (400 for invalid input, 500 for internal errors)
+  - Proper error handling (400 for invalid input, 429 for rate limit, 500 for internal errors, 502 for LLM unavailable)
 
 ### Phase 6: Testing
 - [x] `tests/conftest.py` - Pytest fixtures
   - AsyncClient fixture for testing FastAPI app
   - Mock OpenAI responses to avoid real API calls
-- [x] `tests/test_api.py` - Integration tests (16 tests)
+- [x] `tests/test_api.py` - Integration tests (18 tests)
   - test_health_endpoint - health check works
   - test_cache_miss_calls_llm - LLM called on miss
   - test_cache_hit_returns_cached - cache hit returns cached
@@ -97,10 +109,13 @@ All phases implemented and tested. The semantic caching system is production-rea
   - test_query_with_newlines - handles multiline queries
   - test_query_with_numbers - handles numeric expressions
   - test_whitespace_only_query_error - rejects whitespace-only queries
-- [x] `tests/test_services.py` - Unit tests (20 tests)
+  - test_llm_api_error_returns_502 - 502 for LLM API errors
+  - test_llm_rate_limit_returns_429 - 429 for rate limit errors
+- [x] `tests/test_services.py` - Unit tests (37 tests)
   - TestEmbeddingService: dimensions, normalization, type, similarity, singleton
   - TestClassifier: time-sensitive detection, evergreen detection, caching params
   - TestLLMService: initialization, error handling, successful generation
+  - TestCacheService: initialization, search, store, close, index, eviction policy
 - [x] `pytest.ini` - asyncio_mode = auto
 
 ### Module Markers

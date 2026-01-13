@@ -10,6 +10,18 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
+class LLMServiceUnavailableError(Exception):
+    """Raised when the LLM service is unavailable (API error)."""
+
+    pass
+
+
+class LLMRateLimitError(Exception):
+    """Raised when the LLM rate limit is exceeded."""
+
+    pass
+
+
 class LLMService:
     """Async OpenAI client wrapper for LLM generation."""
 
@@ -48,12 +60,12 @@ class LLMService:
             )
             content = response.choices[0].message.content
             return content if content else ""
-        except openai.APIError as e:
-            logger.error(f"OpenAI API error: {e}")
-            raise RuntimeError(f"LLM service unavailable: {e}")
         except openai.RateLimitError as e:
             logger.error(f"OpenAI rate limit error: {e}")
-            raise RuntimeError(f"Rate limit exceeded: {e}")
+            raise LLMRateLimitError(f"Rate limit exceeded: {e}")
+        except openai.APIError as e:
+            logger.error(f"OpenAI API error: {e}")
+            raise LLMServiceUnavailableError(f"LLM service unavailable: {e}")
 
 
 # Global instance

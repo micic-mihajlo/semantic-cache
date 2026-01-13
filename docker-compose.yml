@@ -18,6 +18,9 @@ services:
     image: redis/redis-stack:latest
     ports:
       - "6379:6379"
+    environment:
+      # Configure Redis eviction policy for cache optimization
+      - REDIS_ARGS=--maxmemory 256mb --maxmemory-policy volatile-ttl
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

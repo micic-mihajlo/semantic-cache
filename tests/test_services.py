@@ -182,10 +182,10 @@ class TestLLMService:
 
     @pytest.mark.asyncio
     async def test_llm_api_error_handling(self):
-        """Test that API errors are converted to RuntimeError."""
+        """Test that API errors are converted to LLMServiceUnavailableError."""
         import httpx
         import openai
-        from app.services.llm import LLMService
+        from app.services.llm import LLMService, LLMServiceUnavailableError
 
         service = LLMService(api_key="test-key")
         service.initialize()
@@ -200,14 +200,14 @@ class TestLLMService:
             )
         )
 
-        with pytest.raises(RuntimeError, match="LLM service unavailable"):
+        with pytest.raises(LLMServiceUnavailableError, match="LLM service unavailable"):
             await service.generate("Test query")
 
     @pytest.mark.asyncio
     async def test_llm_rate_limit_error_handling(self):
-        """Test that rate limit errors are converted to RuntimeError."""
+        """Test that rate limit errors are converted to LLMRateLimitError."""
         import openai
-        from app.services.llm import LLMService
+        from app.services.llm import LLMService, LLMRateLimitError
 
         service = LLMService(api_key="test-key")
         service.initialize()
@@ -223,7 +223,7 @@ class TestLLMService:
             )
         )
 
-        with pytest.raises(RuntimeError, match="Rate limit exceeded"):
+        with pytest.raises(LLMRateLimitError, match="Rate limit exceeded"):
             await service.generate("Test query")
 
     @pytest.mark.asyncio
@@ -269,3 +269,262 @@ class TestLLMService:
         result = await service.generate("Test query")
 
         assert result == ""
+
+
+class TestCacheService:
+    """Tests for cache service functionality."""
+
+    def test_cache_service_initialization(self):
+        """Test cache service initializes with default or provided URL."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        assert service.redis_url is not None
+
+        custom_service = CacheService(redis_url="redis://custom:6379")
+        assert custom_service.redis_url == "redis://custom:6379"
+
+    def test_search_returns_none_when_not_connected(self):
+        """Test search returns None when Redis not connected."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        # Don't connect - redis_client is None
+
+        result = service.search(np.random.rand(384).astype(np.float32), 0.3)
+
+        assert result is None
+
+    def test_store_logs_warning_when_not_connected(self):
+        """Test store handles missing connection gracefully."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        # Don't connect - redis_client is None
+
+        # Should not raise, just log warning
+        service.store(
+            query="test",
+            response="response",
+            embedding=np.random.rand(384).astype(np.float32),
+            query_type="evergreen",
+            ttl=300
+        )
+
+    def test_close_handles_none_client(self):
+        """Test close handles None client gracefully."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        # redis_client is None
+
+        # Should not raise
+        service.close()
+        assert service.redis_client is None
+
+    def test_search_with_mocked_redis(self):
+        """Test search with mocked Redis client returning cache hit."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+
+        # Mock search result
+        mock_doc = MagicMock()
+        mock_doc.distance = "0.05"
+        mock_doc.query = b"What is the capital of France?"
+        mock_doc.response = b"Paris is the capital of France."
+        mock_result = MagicMock()
+        mock_result.docs = [mock_doc]
+
+        mock_redis.ft.return_value.search.return_value = mock_result
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        result = service.search(embedding, threshold=0.3)
+
+        assert result is not None
+        assert result["distance"] == 0.05
+        assert result["response"] == "Paris is the capital of France."
+
+    def test_search_returns_none_above_threshold(self):
+        """Test search returns None when distance exceeds threshold."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+
+        # Mock search result with high distance
+        mock_doc = MagicMock()
+        mock_doc.distance = "0.5"  # Above threshold
+        mock_doc.query = b"test"
+        mock_doc.response = b"response"
+        mock_result = MagicMock()
+        mock_result.docs = [mock_doc]
+
+        mock_redis.ft.return_value.search.return_value = mock_result
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        result = service.search(embedding, threshold=0.3)
+
+        assert result is None
+
+    def test_search_returns_none_on_empty_results(self):
+        """Test search returns None when no documents found."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+
+        # Mock empty search result
+        mock_result = MagicMock()
+        mock_result.docs = []
+
+        mock_redis.ft.return_value.search.return_value = mock_result
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        result = service.search(embedding, threshold=0.3)
+
+        assert result is None
+
+    def test_search_handles_redis_error(self):
+        """Test search handles Redis errors gracefully."""
+        import redis
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        mock_redis.ft.return_value.search.side_effect = redis.ResponseError("Search error")
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        result = service.search(embedding, threshold=0.3)
+
+        assert result is None
+
+    def test_store_with_mocked_redis(self):
+        """Test store correctly stores data in Redis."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        service.store(
+            query="What is the capital of France?",
+            response="Paris",
+            embedding=embedding,
+            query_type="evergreen",
+            ttl=604800
+        )
+
+        mock_redis.hset.assert_called_once()
+        mock_redis.expire.assert_called_once()
+
+    def test_store_handles_redis_error(self):
+        """Test store handles Redis errors gracefully."""
+        import redis
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        mock_redis.hset.side_effect = redis.RedisError("Store error")
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        # Should not raise
+        service.store(
+            query="test",
+            response="response",
+            embedding=embedding,
+            query_type="evergreen",
+            ttl=300
+        )
+
+    def test_close_closes_connection(self):
+        """Test close properly closes Redis connection."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        service.redis_client = mock_redis
+
+        service.close()
+
+        mock_redis.close.assert_called_once()
+        assert service.redis_client is None
+
+    def test_ensure_index_creates_index(self):
+        """Test _ensure_index creates index when not exists."""
+        import redis
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        mock_redis.ft.return_value.info.side_effect = redis.ResponseError("Index not found")
+        service.redis_client = mock_redis
+
+        service._ensure_index()
+
+        mock_redis.ft.return_value.create_index.assert_called_once()
+
+    def test_ensure_index_skips_existing(self):
+        """Test _ensure_index skips creation when index exists."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        mock_redis.ft.return_value.info.return_value = {"index_name": "cache_index"}
+        service.redis_client = mock_redis
+
+        service._ensure_index()
+
+        mock_redis.ft.return_value.create_index.assert_not_called()
+
+    def test_ensure_index_handles_none_client(self):
+        """Test _ensure_index handles None client gracefully."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        # redis_client is None
+
+        # Should not raise
+        service._ensure_index()
+
+    def test_configure_eviction_policy(self):
+        """Test _configure_eviction_policy sets volatile-ttl."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        service.redis_client = mock_redis
+
+        service._configure_eviction_policy()
+
+        mock_redis.config_set.assert_called_once_with("maxmemory-policy", "volatile-ttl")
+
+    def test_configure_eviction_policy_handles_error(self):
+        """Test _configure_eviction_policy handles error gracefully."""
+        import redis
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        mock_redis.config_set.side_effect = redis.ResponseError("Config not allowed")
+        service.redis_client = mock_redis
+
+        # Should not raise
+        service._configure_eviction_policy()
+
+    def test_configure_eviction_policy_handles_none_client(self):
+        """Test _configure_eviction_policy handles None client gracefully."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        # redis_client is None
+
+        # Should not raise
+        service._configure_eviction_policy()
