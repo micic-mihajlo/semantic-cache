@@ -512,3 +512,190 @@ class TestCacheService:
 
         # Should not raise
         service._configure_eviction_policy()
+
+
+class TestMetrics:
+    """Tests for metrics service functionality."""
+
+    def test_metrics_initialization(self):
+        """Test metrics initializes with zero values."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        stats = m.get_stats()
+
+        assert stats["total_queries"] == 0
+        assert stats["cache_hits"] == 0
+        assert stats["cache_misses"] == 0
+        assert stats["hit_rate_percent"] == 0.0
+
+    def test_record_cache_hit(self):
+        """Test recording cache hits."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_cache_hit(50.0)
+        m.record_cache_hit(100.0)
+
+        stats = m.get_stats()
+        assert stats["total_queries"] == 2
+        assert stats["cache_hits"] == 2
+        assert stats["cache_misses"] == 0
+        assert stats["hit_rate_percent"] == 100.0
+        assert stats["latency"]["avg_cache_ms"] == 75.0
+
+    def test_record_cache_miss(self):
+        """Test recording cache misses."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_cache_miss(1000.0)
+
+        stats = m.get_stats()
+        assert stats["total_queries"] == 1
+        assert stats["cache_hits"] == 0
+        assert stats["cache_misses"] == 1
+        assert stats["llm_calls"] == 1
+        assert stats["hit_rate_percent"] == 0.0
+        assert stats["latency"]["avg_llm_ms"] == 1000.0
+
+    def test_record_query_type(self):
+        """Test recording query types."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_query_type("time_sensitive")
+        m.record_query_type("time_sensitive")
+        m.record_query_type("evergreen")
+
+        stats = m.get_stats()
+        assert stats["query_types"]["time_sensitive"] == 2
+        assert stats["query_types"]["evergreen"] == 1
+
+    def test_record_error(self):
+        """Test recording errors."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_error()
+        m.record_error()
+
+        stats = m.get_stats()
+        assert stats["errors"] == 2
+
+    def test_reset(self):
+        """Test resetting metrics."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_cache_hit(100.0)
+        m.record_cache_miss(500.0)
+        m.record_query_type("evergreen")
+        m.record_error()
+
+        m.reset()
+        stats = m.get_stats()
+
+        assert stats["total_queries"] == 0
+        assert stats["cache_hits"] == 0
+        assert stats["cache_misses"] == 0
+        assert stats["errors"] == 0
+
+    def test_hit_rate_calculation(self):
+        """Test hit rate percentage calculation."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_cache_hit(10.0)
+        m.record_cache_hit(10.0)
+        m.record_cache_miss(100.0)
+
+        stats = m.get_stats()
+        assert stats["hit_rate_percent"] == 66.67  # 2/3 = 66.67%
+
+
+class TestCircuitBreaker:
+    """Tests for circuit breaker functionality."""
+
+    def test_circuit_starts_closed(self):
+        """Test circuit starts in closed state."""
+        from app.services.circuit_breaker import CircuitBreaker, CircuitState
+
+        cb = CircuitBreaker(name="test")
+        assert cb.state == CircuitState.CLOSED
+        assert cb.is_available() is True
+
+    def test_circuit_opens_after_failures(self):
+        """Test circuit opens after threshold failures."""
+        from app.services.circuit_breaker import CircuitBreaker, CircuitState
+
+        cb = CircuitBreaker(name="test", failure_threshold=3)
+
+        cb.record_failure()
+        assert cb.state == CircuitState.CLOSED
+
+        cb.record_failure()
+        assert cb.state == CircuitState.CLOSED
+
+        cb.record_failure()
+        assert cb.state == CircuitState.OPEN
+        assert cb.is_available() is False
+
+    def test_circuit_resets_on_success(self):
+        """Test circuit resets failure count on success."""
+        from app.services.circuit_breaker import CircuitBreaker, CircuitState
+
+        cb = CircuitBreaker(name="test", failure_threshold=3)
+
+        cb.record_failure()
+        cb.record_failure()
+        cb.record_success()
+
+        # Failure count should reset
+        cb.record_failure()
+        cb.record_failure()
+        assert cb.state == CircuitState.CLOSED  # Still closed
+
+    def test_circuit_half_open_after_timeout(self):
+        """Test circuit enters half-open after recovery timeout."""
+        from app.services.circuit_breaker import CircuitBreaker, CircuitState
+
+        cb = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0.1)
+
+        cb.record_failure()  # Opens circuit
+        assert cb.state == CircuitState.OPEN
+
+        import time
+        time.sleep(0.15)
+
+        assert cb.state == CircuitState.HALF_OPEN
+        assert cb.is_available() is True
+
+    def test_circuit_closes_on_half_open_success(self):
+        """Test circuit closes after successful call in half-open state."""
+        from app.services.circuit_breaker import CircuitBreaker, CircuitState
+
+        cb = CircuitBreaker(name="test", failure_threshold=1, recovery_timeout=0.1)
+
+        cb.record_failure()
+
+        import time
+        time.sleep(0.15)
+
+        cb.is_available()  # Triggers transition to half-open
+        cb.record_success()
+
+        assert cb.state == CircuitState.CLOSED
+
+    def test_get_status(self):
+        """Test get_status returns correct info."""
+        from app.services.circuit_breaker import CircuitBreaker
+
+        cb = CircuitBreaker(name="test_service", failure_threshold=5, recovery_timeout=30.0)
+        cb.record_failure()
+
+        status = cb.get_status()
+        assert status["name"] == "test_service"
+        assert status["state"] == "closed"
+        assert status["failure_count"] == 1
+        assert status["failure_threshold"] == 5

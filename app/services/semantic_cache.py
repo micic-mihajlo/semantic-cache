@@ -1,11 +1,13 @@
 """Semantic cache manager - orchestrates classification, embedding, caching, and LLM calls."""
 
 import logging
+import time
 
 from app.services.cache import cache_service
 from app.services.classifier import classify, get_caching_params
 from app.services.embedding import embedding_service
 from app.services.llm import llm_service
+from app.services.metrics import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +39,16 @@ class SemanticCacheManager:
         Returns:
             Dict with 'response' and 'metadata' containing 'source'
         """
+        start_time = time.time()
+
         # Classify the query to determine caching parameters
         query_type = classify(query)
         params = get_caching_params(query_type)
         threshold = params["threshold"]
         ttl = params["ttl"]
+
+        # Record query type
+        metrics.record_query_type(query_type)
 
         logger.debug(f"Query classified as {query_type}, threshold: {threshold}, ttl: {ttl}s")
 
@@ -52,12 +59,16 @@ class SemanticCacheManager:
         if not force_refresh:
             cached = cache_service.search(embedding, threshold)
             if cached:
+                latency_ms = (time.time() - start_time) * 1000
+                metrics.record_cache_hit(latency_ms)
+                # Convert distance to confidence (0 distance = 1.0 confidence)
+                confidence = round(1.0 - cached["distance"], 4)
                 logger.info(
-                    f"Cache hit (distance: {cached['distance']:.4f}): {query[:50]}..."
+                    f"Cache hit (distance: {cached['distance']:.4f}, confidence: {confidence}): {query[:50]}..."
                 )
                 return {
                     "response": cached["response"],
-                    "metadata": {"source": "cache"},
+                    "metadata": {"source": "cache", "confidence": confidence},
                 }
 
         # Cache miss or force refresh - call LLM
@@ -66,6 +77,9 @@ class SemanticCacheManager:
 
         # Store in cache
         cache_service.store(query, response, embedding, query_type, ttl)
+
+        latency_ms = (time.time() - start_time) * 1000
+        metrics.record_cache_miss(latency_ms)
 
         return {
             "response": response,

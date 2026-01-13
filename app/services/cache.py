@@ -11,6 +11,7 @@ from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 
 from app.config import settings
+from app.services.circuit_breaker import redis_circuit
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,11 @@ class CacheService:
             logger.warning("Redis client not connected")
             return None
 
+        # Check circuit breaker
+        if not redis_circuit.is_available():
+            logger.warning("Redis circuit breaker is OPEN, skipping cache search")
+            return None
+
         query_vector = embedding.astype(np.float32).tobytes()
         q = (
             Query("*=>[KNN 1 @embedding $vec AS distance]")
@@ -112,6 +118,7 @@ class CacheService:
                 q,
                 {"vec": query_vector},
             )
+            redis_circuit.record_success()
 
             if results.docs:
                 doc = results.docs[0]
@@ -130,6 +137,7 @@ class CacheService:
                         "distance": distance,
                     }
         except redis.ResponseError as e:
+            redis_circuit.record_failure()
             logger.error(f"Redis search error: {e}")
 
         return None
@@ -156,6 +164,11 @@ class CacheService:
             logger.warning("Redis client not connected")
             return
 
+        # Check circuit breaker
+        if not redis_circuit.is_available():
+            logger.warning("Redis circuit breaker is OPEN, skipping cache store")
+            return
+
         key = f"{self.KEY_PREFIX}{hashlib.md5(query.encode()).hexdigest()}"
         mapping = {
             "query": query.encode("utf-8"),
@@ -168,8 +181,10 @@ class CacheService:
         try:
             self.redis_client.hset(key, mapping=mapping)
             self.redis_client.expire(key, ttl)
+            redis_circuit.record_success()
             logger.debug(f"Cached query with TTL {ttl}s: {query[:50]}...")
         except redis.RedisError as e:
+            redis_circuit.record_failure()
             logger.error(f"Redis store error: {e}")
 
     def close(self) -> None:

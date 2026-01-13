@@ -9,9 +9,12 @@ from app.schemas import (
     HealthResponse,
     QueryRequest,
     QueryResponse,
+    StatsResponse,
 )
 from app.services.semantic_cache import semantic_cache_manager
 from app.services.llm import LLMRateLimitError, LLMServiceUnavailableError
+from app.services.metrics import metrics
+from app.services.circuit_breaker import redis_circuit, llm_circuit
 
 logger = logging.getLogger(__name__)
 
@@ -62,3 +65,27 @@ async def query(request: QueryRequest) -> QueryResponse:
 async def health() -> HealthResponse:
     """Health check endpoint."""
     return HealthResponse(status="ok")
+
+
+@router.get("/api/stats", response_model=StatsResponse)
+async def stats() -> StatsResponse:
+    """Get cache performance statistics."""
+    return StatsResponse(**metrics.get_stats())
+
+
+@router.post("/api/stats/reset")
+async def reset_stats() -> dict:
+    """Reset all statistics counters."""
+    metrics.reset()
+    return {"status": "ok", "message": "Statistics reset"}
+
+
+@router.get("/api/circuits")
+async def circuit_status() -> dict:
+    """Get circuit breaker status for all external services."""
+    return {
+        "circuits": [
+            redis_circuit.get_status(),
+            llm_circuit.get_status(),
+        ]
+    }

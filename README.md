@@ -297,6 +297,48 @@ pytest tests/ -v
 | `TestLLMIntegration` | OpenAI | Real LLM responses |
 | `TestEndToEndIntegration` | Redis + OpenAI | Full API flow |
 
+## Embedding Model Benchmarks
+
+Benchmark different embedding models for your use case:
+
+```bash
+python benchmarks/embedding_benchmark.py
+```
+
+**Results (M1 MacBook):**
+
+| Model | Dimension | ms/embed | emb/sec | Quality |
+|-------|-----------|----------|---------|---------|
+| all-MiniLM-L6-v2 | 384 | 0.28 | 3576 | 4.72x |
+| paraphrase-MiniLM-L6-v2 | 384 | 0.35 | 2860 | 4.25x |
+| all-MiniLM-L12-v2 | 384 | 0.57 | 1767 | 4.36x |
+| all-mpnet-base-v2 | 768 | 0.97 | 1032 | 5.14x |
+
+**Recommendation:** `all-MiniLM-L6-v2` (default) offers the best speed/quality tradeoff for semantic caching.
+
+## Load Testing
+
+Load testing uses [Locust](https://locust.io/) to simulate user traffic.
+
+```bash
+# Install locust
+pip install locust
+
+# Run with web UI (open http://localhost:8089)
+locust -f loadtest/locustfile.py --host=http://localhost:3000
+
+# Run headless (10 users, spawn rate 2/sec, run for 60s)
+locust -f loadtest/locustfile.py --host=http://localhost:3000 \
+       --headless -u 10 -r 2 -t 60s
+```
+
+**Test scenarios:**
+- Evergreen queries (cacheable)
+- Time-sensitive queries (strict matching)
+- Semantic variations (cache hit testing)
+- Force refresh (LLM path testing)
+- Rapid-fire requests (stress testing)
+
 ## Docker Commands
 
 ```bash

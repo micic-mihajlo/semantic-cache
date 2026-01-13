@@ -293,3 +293,55 @@ async def test_llm_rate_limit_returns_429(client, mock_cache_service, mock_llm_s
     assert response.status_code == 429
     data = response.json()
     assert "Rate limit exceeded" in data["detail"]
+
+
+# Stats endpoint tests
+
+
+@pytest.mark.asyncio
+async def test_stats_endpoint(client):
+    """Test that stats endpoint returns metrics."""
+    response = await client.get("/api/stats")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "total_queries" in data
+    assert "cache_hits" in data
+    assert "cache_misses" in data
+    assert "hit_rate_percent" in data
+    assert "llm_calls" in data
+    assert "errors" in data
+    assert "latency" in data
+    assert "query_types" in data
+
+
+@pytest.mark.asyncio
+async def test_stats_reset_endpoint(client):
+    """Test that stats reset endpoint clears metrics."""
+    response = await client.post("/api/stats/reset")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["message"] == "Statistics reset"
+
+
+@pytest.mark.asyncio
+async def test_circuits_endpoint(client):
+    """Test that circuits endpoint returns circuit breaker status."""
+    response = await client.get("/api/circuits")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "circuits" in data
+    assert len(data["circuits"]) == 2
+
+    # Check redis circuit
+    redis_cb = next(c for c in data["circuits"] if c["name"] == "redis")
+    assert "state" in redis_cb
+    assert "failure_count" in redis_cb
+
+    # Check llm circuit
+    llm_cb = next(c for c in data["circuits"] if c["name"] == "llm")
+    assert "state" in llm_cb
+    assert "failure_count" in llm_cb
