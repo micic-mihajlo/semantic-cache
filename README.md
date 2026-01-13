@@ -137,6 +137,69 @@ Health check endpoint.
 }
 ```
 
+### GET /api/stats
+
+Returns cache performance metrics and statistics.
+
+**Response:**
+```json
+{
+  "total_queries": 100,
+  "cache_hits": 85,
+  "cache_misses": 15,
+  "hit_rate_percent": 85.0,
+  "llm_calls": 15,
+  "errors": 0,
+  "latency": {
+    "avg_total_ms": 125.5,
+    "avg_cache_ms": 12.3,
+    "avg_llm_ms": 850.2
+  },
+  "query_types": {
+    "evergreen": 70,
+    "time_sensitive": 30
+  },
+  "topics": {
+    "science": 25,
+    "geography": 20,
+    "weather": 15,
+    "general": 40
+  }
+}
+```
+
+### POST /api/stats/reset
+
+Resets all statistics counters.
+
+### GET /api/circuits
+
+Returns circuit breaker status for external dependencies.
+
+**Response:**
+```json
+{
+  "circuits": [
+    {
+      "name": "redis",
+      "state": "closed",
+      "failure_count": 0,
+      "failure_threshold": 3,
+      "recovery_timeout_seconds": 10
+    },
+    {
+      "name": "llm",
+      "state": "closed",
+      "failure_count": 0,
+      "failure_threshold": 3,
+      "recovery_timeout_seconds": 30
+    }
+  ]
+}
+```
+
+Circuit states: `closed` (healthy), `open` (failing, requests blocked), `half_open` (testing recovery).
+
 ## Configuration
 
 ### Environment Variables
