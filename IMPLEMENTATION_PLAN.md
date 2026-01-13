@@ -14,6 +14,10 @@ All phases implemented and tested. The semantic caching system is production-rea
 
 ### Recent Updates
 
+**v0.0.7** - Documentation updates:
+- Added HTTP status codes 429 and 502 to README API documentation
+- Added `test_services.py` to project structure in README
+
 **v0.0.6** - Fixed HTTP status codes and Redis eviction policy:
 - **HTTP status code differentiation**: APIError now returns HTTP 502 (Bad Gateway), RateLimitError returns HTTP 429 (Too Many Requests)
 - Added custom exception classes `LLMServiceUnavailableError` and `LLMRateLimitError` in `app/services/llm.py`
