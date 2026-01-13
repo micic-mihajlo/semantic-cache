@@ -146,8 +146,59 @@ class TestClassifier:
 
         params = get_caching_params("evergreen")
 
-        assert params["threshold"] == 0.30  # Relaxed matching
-        assert params["ttl"] == 604800  # 7 days
+        assert params["threshold"] == 0.30
+        assert params["ttl"] == 604800
+
+    def test_topic_classification_weather(self):
+        """Test weather queries are classified to weather topic."""
+        from app.services.classifier import classify_topic
+
+        assert classify_topic("What's the weather in NYC today?") == "weather"
+        assert classify_topic("Is it going to rain tomorrow?") == "weather"
+
+    def test_topic_classification_technology(self):
+        """Test technology queries are classified to technology topic."""
+        from app.services.classifier import classify_topic
+
+        assert classify_topic("What is Python programming?") == "technology"
+        assert classify_topic("How does machine learning work?") == "technology"
+
+    def test_topic_classification_finance(self):
+        """Test finance queries are classified to finance topic."""
+        from app.services.classifier import classify_topic
+
+        assert classify_topic("What is the bitcoin price?") == "finance"
+        assert classify_topic("How do I invest in the stock market?") == "finance"
+
+    def test_topic_classification_geography(self):
+        """Test geography queries are classified to geography topic."""
+        from app.services.classifier import classify_topic
+
+        assert classify_topic("What is the capital of France?") == "geography"
+        assert classify_topic("Which country has the largest population?") == "geography"
+
+    def test_topic_classification_general(self):
+        """Test generic queries default to general topic."""
+        from app.services.classifier import classify_topic
+
+        assert classify_topic("Hello how are you?") == "general"
+        assert classify_topic("Tell me a joke") == "general"
+
+    def test_full_classification(self):
+        """Test full classification returns all parameters."""
+        from app.services.classifier import classify_full
+
+        result = classify_full("What's the weather today?")
+        assert result.query_type == "time_sensitive"
+        assert result.topic == "weather"
+        assert result.threshold == 0.15
+        assert result.ttl == 300
+
+        result = classify_full("What is the capital of France?")
+        assert result.query_type == "evergreen"
+        assert result.topic == "geography"
+        assert result.threshold == 0.30
+        assert result.ttl == 604800
 
 
 class TestLLMService:
@@ -508,10 +559,54 @@ class TestCacheService:
         from app.services.cache import CacheService
 
         service = CacheService()
-        # redis_client is None
 
-        # Should not raise
         service._configure_eviction_policy()
+
+    def test_search_with_topic_filter(self):
+        """Test search with topic filter."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+
+        mock_doc = MagicMock()
+        mock_doc.distance = "0.05"
+        mock_doc.query = b"What is the weather?"
+        mock_doc.response = b"It's sunny."
+        mock_doc.topic = b"weather"
+        mock_result = MagicMock()
+        mock_result.docs = [mock_doc]
+
+        mock_redis.ft.return_value.search.return_value = mock_result
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        result = service.search(embedding, threshold=0.3, topic="weather")
+
+        assert result is not None
+        assert result["topic"] == "weather"
+
+    def test_store_with_topic(self):
+        """Test store correctly stores topic field."""
+        from app.services.cache import CacheService
+
+        service = CacheService()
+        mock_redis = MagicMock()
+        service.redis_client = mock_redis
+
+        embedding = np.random.rand(384).astype(np.float32)
+        service.store(
+            query="What's the weather?",
+            response="It's sunny.",
+            embedding=embedding,
+            query_type="time_sensitive",
+            ttl=300,
+            topic="weather"
+        )
+
+        call_args = mock_redis.hset.call_args
+        mapping = call_args[1]["mapping"]
+        assert mapping["topic"] == b"weather"
 
 
 class TestMetrics:
@@ -612,6 +707,42 @@ class TestMetrics:
 
         stats = m.get_stats()
         assert stats["hit_rate_percent"] == 66.67  # 2/3 = 66.67%
+
+    def test_record_topic(self):
+        """Test recording topic counts."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_topic("weather")
+        m.record_topic("weather")
+        m.record_topic("finance")
+
+        stats = m.get_stats()
+        assert stats["topics"]["weather"] == 2
+        assert stats["topics"]["finance"] == 1
+
+    def test_record_topic_general(self):
+        """Test recording general topic."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_topic("general")
+        m.record_topic("general")
+
+        stats = m.get_stats()
+        assert stats["topics"]["general"] == 2
+
+    def test_topics_reset(self):
+        """Test topics are reset with metrics."""
+        from app.services.metrics import Metrics
+
+        m = Metrics()
+        m.record_topic("weather")
+        m.record_topic("finance")
+        m.reset()
+
+        stats = m.get_stats()
+        assert stats["topics"] == {}
 
 
 class TestCircuitBreaker:

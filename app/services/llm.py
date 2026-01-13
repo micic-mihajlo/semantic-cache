@@ -6,13 +6,13 @@ import openai
 from openai import AsyncOpenAI
 
 from app.config import settings
-from app.services.circuit_breaker import llm_circuit, CircuitOpenError
+from app.services.circuit_breaker import llm_circuit
 
 logger = logging.getLogger(__name__)
 
 
 class LLMServiceUnavailableError(Exception):
-    """Raised when the LLM service is unavailable (API error)."""
+    """Raised when the LLM service is unavailable."""
 
 
 class LLMRateLimitError(Exception):
@@ -34,25 +34,13 @@ class LLMService:
             logger.warning("No OpenAI API key configured")
 
     async def generate(self, query: str) -> str:
-        """
-        Generate a response for a query using the LLM.
-
-        Args:
-            query: User query text
-
-        Returns:
-            Generated response text
-
-        Raises:
-            RuntimeError: If LLM client not initialized or API error occurs
-        """
+        """Generate a response for a query using the LLM."""
         if self.client is None:
             raise RuntimeError("LLM client not initialized. Check OPENAI_API_KEY.")
 
-        # Check circuit breaker
         if not llm_circuit.is_available():
             raise LLMServiceUnavailableError(
-                f"LLM circuit breaker is OPEN - service temporarily unavailable"
+                "LLM circuit breaker is OPEN - service temporarily unavailable"
             )
 
         try:
@@ -73,5 +61,4 @@ class LLMService:
             raise LLMServiceUnavailableError(f"LLM service unavailable: {e}")
 
 
-# Global instance
 llm_service = LLMService()

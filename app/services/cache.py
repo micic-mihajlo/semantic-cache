@@ -6,7 +6,7 @@ import time
 
 import numpy as np
 import redis
-from redis.commands.search.field import NumericField, TextField, VectorField
+from redis.commands.search.field import NumericField, TagField, TextField, VectorField
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 from redis.commands.search.query import Query
 
@@ -38,11 +38,9 @@ class CacheService:
             return
 
         try:
-            # Set eviction policy to volatile-ttl (evicts keys with shortest TTL when memory full)
             self.redis_client.config_set("maxmemory-policy", "volatile-ttl")
             logger.info("Redis eviction policy set to volatile-ttl")
         except redis.ResponseError as e:
-            # Some Redis configurations may not allow runtime config changes
             logger.warning(f"Could not set eviction policy: {e}")
 
     def _ensure_index(self) -> None:
@@ -60,6 +58,7 @@ class CacheService:
                 TextField("query"),
                 TextField("response"),
                 TextField("query_type"),
+                TagField("topic"),
                 NumericField("created_at"),
                 VectorField(
                     "embedding",
@@ -85,36 +84,49 @@ class CacheService:
         self,
         embedding: np.ndarray,
         threshold: float,
+        topic: str | None = None,
     ) -> dict | None:
-        """
-        Search for a semantically similar cached query.
-
-        Args:
-            embedding: Query embedding vector
-            threshold: Maximum distance threshold for a match
-
-        Returns:
-            Dict with query, response, distance if match found, else None
-        """
+        """Search for a semantically similar cached query."""
         if self.redis_client is None:
             logger.warning("Redis client not connected")
             return None
 
-        # Check circuit breaker
         if not redis_circuit.is_available():
             logger.warning("Redis circuit breaker is OPEN, skipping cache search")
             return None
 
+        if topic and topic != "general":
+            result = self._search_with_filter(embedding, threshold, topic)
+            if result:
+                logger.debug(f"Cache hit in topic partition: {topic}")
+                return result
+            logger.debug(f"No match in topic '{topic}', falling back to global search")
+
+        return self._search_with_filter(embedding, threshold, None)
+
+    def _search_with_filter(
+        self,
+        embedding: np.ndarray,
+        threshold: float,
+        topic: str | None,
+    ) -> dict | None:
+        """Execute a search with optional topic filter."""
         query_vector = embedding.astype(np.float32).tobytes()
+
+        if topic:
+            query_str = f"@topic:{{{topic}}}=>[KNN 3 @embedding $vec AS distance]"
+        else:
+            query_str = "*=>[KNN 1 @embedding $vec AS distance]"
+
         q = (
-            Query("*=>[KNN 1 @embedding $vec AS distance]")
-            .return_fields("query", "response", "query_type", "distance")
+            Query(query_str)
+            .return_fields("query", "response", "query_type", "topic", "distance")
             .sort_by("distance")
             .dialect(2)
         )
 
         try:
-            results = self.redis_client.ft(self.INDEX_NAME).search(
+            results = self.redis_client.ft(self.INDEX_NAME).search(  # type: ignore[union-attr]
                 q,
                 {"vec": query_vector},
             )
@@ -124,17 +136,20 @@ class CacheService:
                 doc = results.docs[0]
                 distance = float(doc.distance)
                 if distance <= threshold:
-                    # Decode bytes to strings
                     query_text = doc.query
                     response_text = doc.response
+                    topic_text = getattr(doc, "topic", b"general")
                     if isinstance(query_text, bytes):
                         query_text = query_text.decode("utf-8")
                     if isinstance(response_text, bytes):
                         response_text = response_text.decode("utf-8")
+                    if isinstance(topic_text, bytes):
+                        topic_text = topic_text.decode("utf-8")
                     return {
                         "query": query_text,
                         "response": response_text,
                         "distance": distance,
+                        "topic": topic_text,
                     }
         except redis.ResponseError as e:
             redis_circuit.record_failure()
@@ -149,22 +164,13 @@ class CacheService:
         embedding: np.ndarray,
         query_type: str,
         ttl: int,
+        topic: str = "general",
     ) -> None:
-        """
-        Store a query-response pair in the cache.
-
-        Args:
-            query: Original query text
-            response: LLM response
-            embedding: Query embedding vector
-            query_type: "time_sensitive" or "evergreen"
-            ttl: Time to live in seconds
-        """
+        """Store a query-response pair in the cache."""
         if self.redis_client is None:
             logger.warning("Redis client not connected")
             return
 
-        # Check circuit breaker
         if not redis_circuit.is_available():
             logger.warning("Redis circuit breaker is OPEN, skipping cache store")
             return
@@ -174,6 +180,7 @@ class CacheService:
             "query": query.encode("utf-8"),
             "response": response.encode("utf-8"),
             "query_type": query_type.encode("utf-8"),
+            "topic": topic.encode("utf-8"),
             "created_at": int(time.time()),
             "embedding": embedding.astype(np.float32).tobytes(),
         }
@@ -182,7 +189,7 @@ class CacheService:
             self.redis_client.hset(key, mapping=mapping)
             self.redis_client.expire(key, ttl)
             redis_circuit.record_success()
-            logger.debug(f"Cached query with TTL {ttl}s: {query[:50]}...")
+            logger.debug(f"Cached query (topic={topic}) with TTL {ttl}s: {query[:50]}...")
         except redis.RedisError as e:
             redis_circuit.record_failure()
             logger.error(f"Redis store error: {e}")
@@ -194,5 +201,4 @@ class CacheService:
             self.redis_client = None
 
 
-# Global instance
 cache_service = CacheService()
