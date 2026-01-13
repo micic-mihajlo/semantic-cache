@@ -120,6 +120,7 @@ TOPIC_PATTERNS: dict[str, list[str]] = {
         r"\bquantum\b",
         r"\brelativity\b",
         r"\bgravity\b",
+        r"\bphotosynthesis\b",
     ],
     "history": [
         r"\bhistory\b",
