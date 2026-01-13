@@ -14,6 +14,15 @@ All phases implemented and tested. The semantic caching system is production-rea
 
 ### Recent Updates
 
+**v0.0.5** - Expanded test coverage:
+- Added `tests/test_services.py` with 20 unit tests for embedding, classifier, and LLM services
+- Added edge case tests for special characters, Unicode, newlines, long queries, and numbers
+- Added whitespace-only query validation in `QueryRequest` schema
+- Embedding tests verify: 384-dim output, normalized vectors, semantic similarity, singleton pattern
+- Classifier tests verify: time-sensitive and evergreen detection, caching parameters
+- LLM tests verify: error handling (APIError, RateLimitError), empty content handling
+- Total tests: 36 (up from 10)
+
 **v0.0.4** - Fixed mypy type errors:
 - Added proper type annotations to `EmbeddingService` singleton pattern in `app/services/embedding.py`
 - Added null check guard to `CacheService._ensure_index()` in `app/services/cache.py`
@@ -71,7 +80,7 @@ All phases implemented and tested. The semantic caching system is production-rea
 - [x] `tests/conftest.py` - Pytest fixtures
   - AsyncClient fixture for testing FastAPI app
   - Mock OpenAI responses to avoid real API calls
-- [x] `tests/test_api.py` - Integration tests (10 tests, all passing)
+- [x] `tests/test_api.py` - Integration tests (16 tests)
   - test_health_endpoint - health check works
   - test_cache_miss_calls_llm - LLM called on miss
   - test_cache_hit_returns_cached - cache hit returns cached
@@ -82,6 +91,16 @@ All phases implemented and tested. The semantic caching system is production-rea
   - test_missing_query_error - 422 error for missing query
   - test_time_sensitive_classification - time-sensitive queries handled
   - test_time_sensitive_strict_matching - stricter threshold for time-sensitive
+  - test_special_characters_in_query - handles C++, C#, & characters
+  - test_unicode_characters_in_query - handles Unicode (e.g., café)
+  - test_long_query_handling - handles queries > 500 characters
+  - test_query_with_newlines - handles multiline queries
+  - test_query_with_numbers - handles numeric expressions
+  - test_whitespace_only_query_error - rejects whitespace-only queries
+- [x] `tests/test_services.py` - Unit tests (20 tests)
+  - TestEmbeddingService: dimensions, normalization, type, similarity, singleton
+  - TestClassifier: time-sensitive detection, evergreen detection, caching params
+  - TestLLMService: initialization, error handling, successful generation
 - [x] `pytest.ini` - asyncio_mode = auto
 
 ### Module Markers

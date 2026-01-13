@@ -1,6 +1,6 @@
 """Pydantic models for API request/response validation."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class QueryRequest(BaseModel):
@@ -11,6 +11,14 @@ class QueryRequest(BaseModel):
         default=False,
         description="If true, bypass cache and force LLM call",
     )
+
+    @field_validator("query")
+    @classmethod
+    def query_must_not_be_whitespace_only(cls, v: str) -> str:
+        """Validate that query is not whitespace-only."""
+        if not v.strip():
+            raise ValueError("Query cannot be empty or whitespace-only")
+        return v
 
 
 class QueryMetadata(BaseModel):

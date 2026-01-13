@@ -150,3 +150,101 @@ async def test_time_sensitive_strict_matching(client, mock_cache_service):
     data = response.json()
     # Should be a miss because NYC != LA with strict threshold
     assert data["metadata"]["source"] == "llm"
+
+
+# Edge case tests
+
+
+@pytest.mark.asyncio
+async def test_special_characters_in_query(client, mock_cache_service, mock_llm_service):
+    """Test that queries with special characters are handled correctly."""
+    mock_cache_service.search.return_value = None
+
+    response = await client.post(
+        "/api/query",
+        json={"query": "What is C++ & how does it differ from C#?"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "response" in data
+    assert data["metadata"]["source"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_unicode_characters_in_query(client, mock_cache_service, mock_llm_service):
+    """Test that queries with Unicode characters are handled correctly."""
+    mock_cache_service.search.return_value = None
+
+    response = await client.post(
+        "/api/query",
+        json={"query": "What does the word caf\u00e9 mean in French?"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "response" in data
+    assert data["metadata"]["source"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_long_query_handling(client, mock_cache_service, mock_llm_service):
+    """Test that long queries are handled correctly."""
+    mock_cache_service.search.return_value = None
+
+    # Create a long query (> 500 characters)
+    long_query = "Explain the following concept in detail: " + "word " * 100
+
+    response = await client.post(
+        "/api/query",
+        json={"query": long_query},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "response" in data
+    assert data["metadata"]["source"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_query_with_newlines(client, mock_cache_service, mock_llm_service):
+    """Test that queries with newlines are handled correctly."""
+    mock_cache_service.search.return_value = None
+
+    response = await client.post(
+        "/api/query",
+        json={"query": "What is Python?\nHow is it used?"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "response" in data
+    assert data["metadata"]["source"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_query_with_numbers(client, mock_cache_service, mock_llm_service):
+    """Test that queries with numbers are handled correctly."""
+    mock_cache_service.search.return_value = None
+
+    response = await client.post(
+        "/api/query",
+        json={"query": "What is 2 + 2? And what about 1000 * 1000?"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "response" in data
+    assert data["metadata"]["source"] == "llm"
+
+
+@pytest.mark.asyncio
+async def test_whitespace_only_query_error(client):
+    """Test that whitespace-only query returns validation error."""
+    response = await client.post(
+        "/api/query",
+        json={"query": "   "},
+    )
+
+    # Whitespace-only should fail validation like empty string
+    assert response.status_code == 422
