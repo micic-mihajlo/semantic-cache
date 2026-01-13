@@ -54,9 +54,8 @@ class LLMService:
 
         try:
             response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-5-mini",
                 messages=[{"role": "user", "content": query}],
-                temperature=0,
             )
             content = response.choices[0].message.content
             return content if content else ""

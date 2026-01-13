@@ -41,3 +41,6 @@ htmlcov/
 # Model cache (downloaded at runtime)
 *.bin
 *.onnx
+
+# Planning docs (not for repo)
+_planning/

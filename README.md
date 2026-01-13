@@ -36,7 +36,7 @@ POST /api/query
          ▼
 ┌─────────────────┐
 │ Call LLM        │
-│ (gpt-4o-mini)   │
+│ (gpt-5-mini)   │
 └────────┬────────┘
          │
          ▼
@@ -206,7 +206,7 @@ Queries are classified to determine appropriate caching behavior:
 | Persistence | Cache survives restarts |
 | Performance | Sub-millisecond lookups |
 
-### LLM: gpt-4o-mini
+### LLM: gpt-5-mini
 
 | Criteria | Value |
 |----------|-------|
@@ -255,11 +255,11 @@ python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# Run tests
-pytest tests/ -v
+# Run unit tests (mocked, no external services needed)
+pytest tests/ -v --ignore=tests/test_integration.py
 
 # Run with coverage
-pytest tests/ -v --cov=app
+pytest tests/ -v --cov=app --ignore=tests/test_integration.py
 
 # Type checking
 mypy app/
@@ -270,6 +270,32 @@ ruff check app/
 # Run locally (requires Redis running)
 uvicorn app.main:app --host 0.0.0.0 --port 3000 --reload
 ```
+
+## Integration Tests
+
+Integration tests hit real services (Redis, OpenAI) to verify actual behavior.
+
+```bash
+# Prerequisites: Redis running and OPENAI_API_KEY set
+docker compose up redis -d  # Start Redis only
+
+# Run all integration tests
+pytest tests/test_integration.py -v
+
+# Run specific integration test class
+pytest tests/test_integration.py::TestEndToEndIntegration -v
+
+# Run both unit and integration tests
+pytest tests/ -v
+```
+
+| Test Class | Services Required | What It Tests |
+|------------|-------------------|---------------|
+| `TestEmbeddingIntegration` | None (local model) | Real embedding generation |
+| `TestClassifierIntegration` | None | Query classification logic |
+| `TestCacheIntegration` | Redis | Store/retrieve, semantic matching |
+| `TestLLMIntegration` | OpenAI | Real LLM responses |
+| `TestEndToEndIntegration` | Redis + OpenAI | Full API flow |
 
 ## Docker Commands
 
