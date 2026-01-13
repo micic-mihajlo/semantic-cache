@@ -5,7 +5,9 @@
 ## Build & Run
 
 ```bash
-# Install dependencies (local dev)
+# Install dependencies (local dev - Python 3.12 required)
+python3.12 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 
 # Run the application (local dev)
