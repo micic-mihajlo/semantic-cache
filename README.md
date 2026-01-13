@@ -120,7 +120,9 @@ Submit a query for processing. Returns cached response if semantically similar q
 **Status Codes:**
 - `200`: Success
 - `400`: Invalid request (missing query)
+- `429`: Rate limit exceeded (OpenAI rate limit)
 - `500`: Internal server error
+- `502`: LLM service unavailable (OpenAI API error)
 
 ### GET /health
 
@@ -241,7 +243,8 @@ boardy-semantic-cache/
 └── tests/
     ├── __init__.py
     ├── conftest.py          # Pytest fixtures
-    └── test_api.py          # Integration tests
+    ├── test_api.py          # Integration tests
+    └── test_services.py     # Service unit tests
 ```
 
 ## Local Development
