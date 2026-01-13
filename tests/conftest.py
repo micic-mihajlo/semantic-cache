@@ -64,9 +64,9 @@ def mock_embedding_service():
 async def client(mock_llm_service, mock_cache_service, mock_embedding_service):
     """Async HTTP client for testing FastAPI endpoints."""
     # Need to patch at the module level where they're used
-    with patch("app.core.semantic_cache.llm_service", mock_llm_service), \
-         patch("app.core.semantic_cache.cache_service", mock_cache_service), \
-         patch("app.core.semantic_cache.embedding_service", mock_embedding_service), \
+    with patch("app.services.semantic_cache.llm_service", mock_llm_service), \
+         patch("app.services.semantic_cache.cache_service", mock_cache_service), \
+         patch("app.services.semantic_cache.embedding_service", mock_embedding_service), \
          patch("app.main.cache_service", mock_cache_service), \
          patch("app.main.llm_service", mock_llm_service):
         from app.main import app

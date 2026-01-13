@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api.routes import router
+from app.routes import router
 from app.services.cache import cache_service
 from app.services.llm import llm_service
 

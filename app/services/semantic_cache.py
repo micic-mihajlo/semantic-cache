@@ -38,15 +38,12 @@ class SemanticCacheManager:
             Dict with 'response' and 'metadata' containing 'source'
         """
         # Classify the query to determine caching parameters
-        query_type, confidence = classify(query)
+        query_type = classify(query)
         params = get_caching_params(query_type)
         threshold = params["threshold"]
         ttl = params["ttl"]
 
-        logger.debug(
-            f"Query classified as {query_type} (confidence: {confidence:.2f}), "
-            f"threshold: {threshold}, ttl: {ttl}s"
-        )
+        logger.debug(f"Query classified as {query_type}, threshold: {threshold}, ttl: {ttl}s")
 
         # Generate embedding for the query
         embedding = embedding_service.embed(query)

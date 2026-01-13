@@ -13,13 +13,9 @@ logger = logging.getLogger(__name__)
 class LLMServiceUnavailableError(Exception):
     """Raised when the LLM service is unavailable (API error)."""
 
-    pass
-
 
 class LLMRateLimitError(Exception):
     """Raised when the LLM rate limit is exceeded."""
-
-    pass
 
 
 class LLMService:

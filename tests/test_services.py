@@ -71,14 +71,19 @@ class TestEmbeddingService:
         # Unrelated queries should have distance > 0.3
         assert distance > 0.3, f"Unrelated queries should have distance > 0.3, got {distance}"
 
-    def test_singleton_pattern(self):
-        """Test that EmbeddingService uses singleton pattern."""
+    def test_multiple_instances_work(self):
+        """Test that multiple EmbeddingService instances work independently."""
         from app.services.embedding import EmbeddingService
 
         service1 = EmbeddingService()
         service2 = EmbeddingService()
 
-        assert service1 is service2, "Singleton pattern should return same instance"
+        # Both should produce valid embeddings
+        emb1 = service1.embed("Test query")
+        emb2 = service2.embed("Test query")
+
+        assert emb1.shape == (384,)
+        assert emb2.shape == (384,)
 
 
 class TestClassifier:
@@ -88,64 +93,43 @@ class TestClassifier:
         """Test that weather queries are classified as time-sensitive."""
         from app.services.classifier import classify
 
-        query_type, confidence = classify("What's the weather in NYC today?")
-
-        assert query_type == "time_sensitive"
-        assert confidence >= 0.7
+        assert classify("What's the weather in NYC today?") == "time_sensitive"
 
     def test_time_sensitive_news_query(self):
         """Test that news queries are classified as time-sensitive."""
         from app.services.classifier import classify
 
-        query_type, confidence = classify("What are the latest news headlines?")
-
-        assert query_type == "time_sensitive"
-        assert confidence >= 0.7
+        assert classify("What are the latest news headlines?") == "time_sensitive"
 
     def test_time_sensitive_stock_query(self):
         """Test that stock queries are classified as time-sensitive."""
         from app.services.classifier import classify
 
-        query_type, confidence = classify("What is the current bitcoin price?")
-
-        assert query_type == "time_sensitive"
-        assert confidence >= 0.7
+        assert classify("What is the current bitcoin price?") == "time_sensitive"
 
     def test_evergreen_historical_query(self):
         """Test that historical queries are classified as evergreen."""
         from app.services.classifier import classify
 
-        query_type, confidence = classify("Who was the first president of the USA?")
-
-        assert query_type == "evergreen"
-        assert confidence >= 0.7
+        assert classify("Who was the first president of the USA?") == "evergreen"
 
     def test_evergreen_definition_query(self):
         """Test that definition queries are classified as evergreen."""
         from app.services.classifier import classify
 
-        query_type, confidence = classify("What is the definition of democracy?")
-
-        assert query_type == "evergreen"
-        assert confidence >= 0.7
+        assert classify("What is the definition of democracy?") == "evergreen"
 
     def test_evergreen_howto_query(self):
         """Test that how-to queries are classified as evergreen."""
         from app.services.classifier import classify
 
-        query_type, confidence = classify("How do you tie a tie?")
-
-        assert query_type == "evergreen"
-        assert confidence >= 0.7
+        assert classify("How do you tie a tie?") == "evergreen"
 
     def test_default_evergreen_classification(self):
         """Test that queries without patterns default to evergreen."""
         from app.services.classifier import classify
 
-        query_type, confidence = classify("What is the capital of France?")
-
-        assert query_type == "evergreen"
-        assert confidence == 0.6  # Default confidence
+        assert classify("What is the capital of France?") == "evergreen"
 
     def test_caching_params_time_sensitive(self):
         """Test caching parameters for time-sensitive queries."""

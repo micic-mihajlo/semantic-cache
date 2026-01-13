@@ -43,42 +43,27 @@ EVERGREEN_PATTERNS = [
 
 # Caching parameters by query type
 CACHING_PARAMS = {
-    "time_sensitive": {
-        "threshold": 0.15,  # Strict matching
-        "ttl": 300,  # 5 minutes
-    },
-    "evergreen": {
-        "threshold": 0.30,  # Relaxed matching
-        "ttl": 604800,  # 7 days
-    },
+    "time_sensitive": {"threshold": 0.15, "ttl": 300},  # 5 minutes
+    "evergreen": {"threshold": 0.30, "ttl": 604800},  # 7 days
 }
 
 
-def classify(query: str) -> tuple[str, float]:
-    """
-    Classify a query as time-sensitive or evergreen.
-
-    Returns:
-        tuple of (query_type, confidence) where query_type is
-        "time_sensitive" or "evergreen" and confidence is 0.0-1.0
-    """
+def classify(query: str) -> str:
+    """Classify a query as time-sensitive or evergreen."""
     q = query.lower()
 
     # Check evergreen patterns first
     for pattern in EVERGREEN_PATTERNS:
         if re.search(pattern, q):
-            return ("evergreen", 0.9)
+            return "evergreen"
 
     # Count time-sensitive matches
     time_matches = sum(1 for p in TIME_SENSITIVE_PATTERNS if re.search(p, q))
 
-    if time_matches >= 2:
-        return ("time_sensitive", 0.95)
-    elif time_matches == 1:
-        return ("time_sensitive", 0.7)
+    if time_matches >= 1:
+        return "time_sensitive"
 
-    # Default to evergreen with lower confidence
-    return ("evergreen", 0.6)
+    return "evergreen"
 
 
 def get_caching_params(query_type: str) -> dict:

@@ -5,21 +5,15 @@ from sentence_transformers import SentenceTransformer
 
 
 class EmbeddingService:
-    """Singleton wrapper for SentenceTransformer model."""
+    """Wrapper for SentenceTransformer model."""
 
-    _instance: "EmbeddingService | None" = None
-    model: SentenceTransformer
-
-    def __new__(cls) -> "EmbeddingService":
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance.model = SentenceTransformer("all-MiniLM-L6-v2")
-        return cls._instance
+    def __init__(self):
+        self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
     def embed(self, text: str) -> np.ndarray:
         """Generate normalized 384-dim embedding for text."""
         return self.model.encode(text, normalize_embeddings=True)
 
 
-# Global singleton instance
+# Module-level singleton
 embedding_service = EmbeddingService()

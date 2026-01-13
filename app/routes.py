@@ -4,13 +4,13 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from app.api.schemas import (
+from app.schemas import (
     ErrorResponse,
     HealthResponse,
     QueryRequest,
     QueryResponse,
 )
-from app.core.semantic_cache import semantic_cache_manager
+from app.services.semantic_cache import semantic_cache_manager
 from app.services.llm import LLMRateLimitError, LLMServiceUnavailableError
 
 logger = logging.getLogger(__name__)

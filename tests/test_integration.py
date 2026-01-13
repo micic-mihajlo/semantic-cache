@@ -100,7 +100,7 @@ class TestClassifierIntegration:
         ]
 
         for query in time_sensitive_queries:
-            query_type, confidence = classify(query)
+            query_type = classify(query)
             params = get_caching_params(query_type)
             assert query_type == "time_sensitive", f"Failed: {query}"
             assert params["threshold"] == 0.15
@@ -116,7 +116,7 @@ class TestClassifierIntegration:
         ]
 
         for query in evergreen_queries:
-            query_type, confidence = classify(query)
+            query_type = classify(query)
             params = get_caching_params(query_type)
             assert query_type == "evergreen", f"Failed: {query}"
             assert params["threshold"] == 0.30
@@ -268,8 +268,8 @@ class TestEndToEndIntegration:
         test_llm_service.initialize()
 
         # Patch the global services used by the app
-        with patch("app.core.semantic_cache.cache_service", test_cache_service), \
-             patch("app.core.semantic_cache.llm_service", test_llm_service), \
+        with patch("app.services.semantic_cache.cache_service", test_cache_service), \
+             patch("app.services.semantic_cache.llm_service", test_llm_service), \
              patch("app.main.cache_service", test_cache_service), \
              patch("app.main.llm_service", test_llm_service):
 
@@ -284,12 +284,12 @@ class TestEndToEndIntegration:
         """Test a query that results in cache miss and LLM call."""
         import uuid
 
-        # Use unique query to ensure cache miss
+        # Use forceRefresh to ensure we test the LLM path
         unique_query = f"What is {uuid.uuid4().hex[:8]} in simple terms?"
 
         response = await client.post(
             "/api/query",
-            json={"query": unique_query},
+            json={"query": unique_query, "forceRefresh": True},
         )
 
         assert response.status_code == 200
