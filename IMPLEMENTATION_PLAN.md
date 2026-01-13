@@ -12,6 +12,13 @@ Build a production-ready semantic caching system to reduce LLM API costs by iden
 
 All phases implemented and tested. The semantic caching system is production-ready.
 
+### Recent Updates
+
+**v0.0.4** - Fixed mypy type errors:
+- Added proper type annotations to `EmbeddingService` singleton pattern in `app/services/embedding.py`
+- Added null check guard to `CacheService._ensure_index()` in `app/services/cache.py`
+- All 13 source files now pass mypy with `--ignore-missing-imports`
+
 ---
 
 ## Completed
