@@ -7,9 +7,10 @@ from sentence_transformers import SentenceTransformer
 class EmbeddingService:
     """Singleton wrapper for SentenceTransformer model."""
 
-    _instance = None
+    _instance: "EmbeddingService | None" = None
+    model: SentenceTransformer
 
-    def __new__(cls):
+    def __new__(cls) -> "EmbeddingService":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
             cls._instance.model = SentenceTransformer("all-MiniLM-L6-v2")

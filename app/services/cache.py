@@ -32,6 +32,10 @@ class CacheService:
 
     def _ensure_index(self) -> None:
         """Create RediSearch index if it doesn't exist."""
+        if self.redis_client is None:
+            logger.warning("Redis client not connected, cannot ensure index")
+            return
+
         try:
             self.redis_client.ft(self.INDEX_NAME).info()
             logger.info("Redis index already exists")
