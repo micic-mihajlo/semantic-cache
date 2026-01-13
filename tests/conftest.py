@@ -82,4 +82,5 @@ def cached_response():
         "query": "What is the capital of France?",
         "response": "Paris is the capital of France.",
         "distance": 0.05,
+        "topic": "geography",
     }

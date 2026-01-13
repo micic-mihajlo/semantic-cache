@@ -25,10 +25,8 @@ class QueryMetadata(BaseModel):
     """Metadata about query response."""
 
     source: str = Field(..., description='Either "cache" or "llm"')
-    confidence: float | None = Field(
-        default=None,
-        description="Confidence score (0-1) for cache hits based on similarity. Higher is better."
-    )
+    confidence: float | None = Field(default=None)
+    topic: str | None = Field(default=None)
 
 
 class QueryResponse(BaseModel):
@@ -53,26 +51,27 @@ class HealthResponse(BaseModel):
 class LatencyStats(BaseModel):
     """Latency statistics."""
 
-    avg_total_ms: float = Field(..., description="Average total latency in ms")
-    avg_cache_ms: float = Field(..., description="Average cache hit latency in ms")
-    avg_llm_ms: float = Field(..., description="Average LLM call latency in ms")
+    avg_total_ms: float
+    avg_cache_ms: float
+    avg_llm_ms: float
 
 
 class QueryTypeStats(BaseModel):
     """Query type statistics."""
 
-    time_sensitive: int = Field(..., description="Number of time-sensitive queries")
-    evergreen: int = Field(..., description="Number of evergreen queries")
+    time_sensitive: int
+    evergreen: int
 
 
 class StatsResponse(BaseModel):
     """Cache statistics response."""
 
-    total_queries: int = Field(..., description="Total number of queries processed")
-    cache_hits: int = Field(..., description="Number of cache hits")
-    cache_misses: int = Field(..., description="Number of cache misses")
-    hit_rate_percent: float = Field(..., description="Cache hit rate percentage")
-    llm_calls: int = Field(..., description="Number of LLM API calls")
-    errors: int = Field(..., description="Number of errors")
+    total_queries: int
+    cache_hits: int
+    cache_misses: int
+    hit_rate_percent: float
+    llm_calls: int
+    errors: int
     latency: LatencyStats
     query_types: QueryTypeStats
+    topics: dict[str, int] = Field(default_factory=dict)

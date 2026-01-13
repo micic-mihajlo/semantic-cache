@@ -14,7 +14,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.config import settings
 from app.services.cache import CacheService
-from app.services.classifier import classify, get_caching_params
+from app.services.classifier import classify, classify_topic, get_caching_params
 from app.services.embedding import embedding_service
 from app.services.llm import LLMService
 
@@ -122,6 +122,34 @@ class TestClassifierIntegration:
             assert params["threshold"] == 0.30
             assert params["ttl"] == 604800
 
+    def test_topic_classification(self):
+        """Test topic classification for cache partitioning."""
+        topic_queries = {
+            "weather": "What's the weather forecast for tomorrow?",
+            "finance": "What's the stock price of Tesla?",
+            "sports": "Who won the Super Bowl last year?",
+            "technology": "What programming language is best for AI?",
+            "science": "How does photosynthesis work?",
+            "history": "When did World War II end?",
+            "geography": "What is the capital of France?",
+        }
+
+        for expected_topic, query in topic_queries.items():
+            topic = classify_topic(query)
+            assert topic == expected_topic, f"Query '{query}' got '{topic}', expected '{expected_topic}'"
+
+    def test_general_topic_fallback(self):
+        """Test that unclassifiable queries fall back to general."""
+        general_queries = [
+            "Tell me a joke",
+            "What should I have for dinner?",
+            "Random thoughts about life",
+        ]
+
+        for query in general_queries:
+            topic = classify_topic(query)
+            assert topic == "general", f"Query '{query}' should be 'general', got '{topic}'"
+
 
 @skip_no_redis
 class TestCacheIntegration:
@@ -213,6 +241,67 @@ class TestCacheIntegration:
         )
 
         assert result is None
+
+    def test_store_and_search_with_topic(self, cache_service):
+        """Test storing and searching within a topic partition."""
+        query = "What's the weather in NYC?"
+        response = "It's sunny and 75F in NYC."
+        embedding = embedding_service.embed(query)
+
+        cache_service.store(
+            query=query,
+            response=response,
+            embedding=embedding,
+            query_type="time_sensitive",
+            ttl=60,
+            topic="weather",
+        )
+
+        result = cache_service.search(
+            embedding=embedding,
+            threshold=0.3,
+            topic="weather",
+        )
+
+        assert result is not None
+        assert result["response"] == response
+        assert result["topic"] == "weather"
+
+    def test_topic_partitioning_isolation(self, cache_service):
+        """Test that topic partitioning filters by topic first."""
+        weather_query = "What's the forecast for Boston?"
+        finance_query = "What's the stock forecast for next week?"
+
+        weather_embedding = embedding_service.embed(weather_query)
+        finance_embedding = embedding_service.embed(finance_query)
+
+        cache_service.store(
+            query=weather_query,
+            response="Boston weather response",
+            embedding=weather_embedding,
+            query_type="time_sensitive",
+            ttl=60,
+            topic="weather",
+        )
+
+        cache_service.store(
+            query=finance_query,
+            response="Finance forecast response",
+            embedding=finance_embedding,
+            query_type="time_sensitive",
+            ttl=60,
+            topic="finance",
+        )
+
+        # Search for weather topic should return weather result
+        result = cache_service.search(
+            embedding=weather_embedding,
+            threshold=0.3,
+            topic="weather",
+        )
+
+        assert result is not None
+        assert result["topic"] == "weather"
 
 
 @skip_no_openai

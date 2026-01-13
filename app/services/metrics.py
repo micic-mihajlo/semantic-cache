@@ -1,6 +1,6 @@
 """Metrics service for tracking cache performance."""
 
-import time
+from collections import defaultdict
 from dataclasses import dataclass, field
 from threading import Lock
 
@@ -10,22 +10,17 @@ class Metrics:
     """Thread-safe metrics collector for cache performance."""
 
     _lock: Lock = field(default_factory=Lock, repr=False)
-
-    # Counters
     total_queries: int = 0
     cache_hits: int = 0
     cache_misses: int = 0
     llm_calls: int = 0
     errors: int = 0
-
-    # Latency tracking (in milliseconds)
     total_latency_ms: float = 0.0
     cache_latency_ms: float = 0.0
     llm_latency_ms: float = 0.0
-
-    # Query type counters
     time_sensitive_queries: int = 0
     evergreen_queries: int = 0
+    _topic_counts: dict[str, int] = field(default_factory=lambda: defaultdict(int))
 
     def record_cache_hit(self, latency_ms: float) -> None:
         """Record a cache hit with latency."""
@@ -51,6 +46,11 @@ class Metrics:
                 self.time_sensitive_queries += 1
             else:
                 self.evergreen_queries += 1
+
+    def record_topic(self, topic: str) -> None:
+        """Record query topic for cache partitioning stats."""
+        with self._lock:
+            self._topic_counts[topic] += 1
 
     def record_error(self) -> None:
         """Record an error."""
@@ -97,6 +97,7 @@ class Metrics:
                     "time_sensitive": self.time_sensitive_queries,
                     "evergreen": self.evergreen_queries,
                 },
+                "topics": dict(self._topic_counts),
             }
 
     def reset(self) -> None:
@@ -112,7 +113,7 @@ class Metrics:
             self.llm_latency_ms = 0.0
             self.time_sensitive_queries = 0
             self.evergreen_queries = 0
+            self._topic_counts.clear()
 
 
-# Global metrics instance
 metrics = Metrics()

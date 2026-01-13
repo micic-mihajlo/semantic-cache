@@ -5,7 +5,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
-from typing import Callable, TypeVar
+from typing import TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -15,26 +15,19 @@ T = TypeVar("T")
 class CircuitState(Enum):
     """Circuit breaker states."""
 
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject requests
-    HALF_OPEN = "half_open"  # Testing if service recovered
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
 
 
 @dataclass
 class CircuitBreaker:
-    """
-    Circuit breaker for protecting external service calls.
-
-    States:
-    - CLOSED: Normal operation, requests go through
-    - OPEN: Service is down, fail fast without calling
-    - HALF_OPEN: Testing recovery, allow one request through
-    """
+    """Circuit breaker for protecting external service calls."""
 
     name: str
-    failure_threshold: int = 5  # Failures before opening
-    recovery_timeout: float = 30.0  # Seconds before trying again
-    half_open_max_calls: int = 1  # Calls allowed in half-open state
+    failure_threshold: int = 5
+    recovery_timeout: float = 30.0
+    half_open_max_calls: int = 1
 
     def __post_init__(self):
         self._lock = Lock()
@@ -85,7 +78,7 @@ class CircuitBreaker:
 
     def is_available(self) -> bool:
         """Check if requests should be allowed through."""
-        state = self.state  # This also checks for recovery
+        state = self.state
         if state == CircuitState.CLOSED:
             return True
         if state == CircuitState.HALF_OPEN:
@@ -94,7 +87,7 @@ class CircuitBreaker:
                     self._half_open_calls += 1
                     return True
             return False
-        return False  # OPEN
+        return False
 
     def get_status(self) -> dict:
         """Get circuit breaker status for monitoring."""
@@ -116,6 +109,5 @@ class CircuitOpenError(Exception):
         super().__init__(f"Circuit '{circuit_name}' is OPEN - service unavailable")
 
 
-# Global circuit breakers for external services
 redis_circuit = CircuitBreaker(name="redis", failure_threshold=3, recovery_timeout=10.0)
 llm_circuit = CircuitBreaker(name="llm", failure_threshold=3, recovery_timeout=30.0)

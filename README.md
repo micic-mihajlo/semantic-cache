@@ -107,7 +107,8 @@ Submit a query for processing. Returns cached response if semantically similar q
 {
   "response": "The capital of France is Paris.",
   "metadata": {
-    "source": "cache"
+    "source": "cache",
+    "topic": "geography"
   }
 }
 ```
@@ -116,6 +117,7 @@ Submit a query for processing. Returns cached response if semantically similar q
 |-------|------|-------------|
 | response | string | The answer to the query |
 | metadata.source | string | `"cache"` or `"llm"` indicating response origin |
+| metadata.topic | string | Topic classification (weather, finance, geography, etc.) |
 
 **Status Codes:**
 - `200`: Success
@@ -180,6 +182,33 @@ Queries are classified to determine appropriate caching behavior:
 **Why different TTLs?**
 - **5 minutes**: Weather, stock prices, and news change frequently.
 - **7 days**: Historical facts and definitions rarely change.
+
+### Topic-Based Cache Partitioning
+
+Queries are classified into topics to improve cache hit accuracy by searching within the same topic first:
+
+| Topic | Example Queries |
+|-------|-----------------|
+| weather | "What's the forecast?", "Is it raining?" |
+| finance | "Stock price of AAPL", "Bitcoin value" |
+| sports | "Who won the game?", "NBA scores" |
+| technology | "Best programming language", "AI trends" |
+| science | "How does photosynthesis work?" |
+| history | "When did WWII end?" |
+| geography | "Capital of France", "Largest country" |
+| news | "Latest headlines", "Breaking news" |
+| general | Queries that don't match other topics |
+
+**How it works:**
+1. Query is classified into a topic using pattern matching
+2. Cache search first looks within the same topic partition
+3. If no match, falls back to global search
+4. Response is stored with topic tag for future lookups
+
+**Benefits:**
+- Reduces false positive cache hits (weather in NYC won't match finance queries)
+- Improves cache hit rate for domain-specific queries
+- Enables topic-level analytics
 
 ### Time-Sensitive Detection Patterns
 
@@ -338,6 +367,8 @@ locust -f loadtest/locustfile.py --host=http://localhost:3000 \
 - Semantic variations (cache hit testing)
 - Force refresh (LLM path testing)
 - Rapid-fire requests (stress testing)
+
+**Results:** See [loadtest/RESULTS.md](loadtest/RESULTS.md) for benchmark results (94.6% cache hit rate achieved).
 
 ## Docker Commands
 
