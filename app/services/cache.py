@@ -114,7 +114,7 @@ class CacheService:
         query_vector = embedding.astype(np.float32).tobytes()
 
         if topic:
-            query_str = f"@topic:{{{topic}}}=>[KNN 3 @embedding $vec AS distance]"
+            query_str = f"@topic:{{{topic}}}=>[KNN 1 @embedding $vec AS distance]"
         else:
             query_str = "*=>[KNN 1 @embedding $vec AS distance]"
 
