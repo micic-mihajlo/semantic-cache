@@ -1,5 +1,7 @@
 # Semantic Caching System
 
+DEMO: https://www.loom.com/share/8862d51bd01141889205da3e0f840c8c
+
 A production-ready semantic caching system that reduces LLM API costs by identifying semantically similar queries and returning cached responses instead of making redundant API calls.
 
 ## Why Semantic Caching?
