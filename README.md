@@ -61,7 +61,7 @@ POST /api/query
 
 ```bash
 # 1. Clone and navigate to the project
-cd boardy-semantic-cache
+cd semantic-cache
 
 # 2. Create .env file with your OpenAI API key
 echo "OPENAI_API_KEY=sk-your-key-here" > .env
@@ -310,7 +310,7 @@ Queries are classified into topics to improve cache hit accuracy by searching wi
 ## Project Structure
 
 ```
-boardy-semantic-cache/
+semantic-cache/
 ├── docker-compose.yml
 ├── Dockerfile
 ├── .env.example
